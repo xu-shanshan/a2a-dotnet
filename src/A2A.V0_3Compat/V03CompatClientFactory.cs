@@ -7,9 +7,27 @@ using V03 = A2A.V0_3;
 /// Factory for creating <see cref="IA2AClient"/> instances that talk to A2A v0.3 agents.
 /// Use this instead of <see cref="A2AClientFactory"/> when the target agent is known to be v0.3.
 /// </summary>
+/// <remarks>
+/// To enable automatic v0.3 routing via <see cref="A2AClientFactory"/> (for callers that do not
+/// know the server version in advance), call <see cref="RegisterWithMainFactory"/> once at startup.
+/// </remarks>
 public static class V03CompatClientFactory
 {
     private static readonly HttpClient s_sharedClient = new();
+
+    /// <summary>
+    /// Registers v0.3 JSON-RPC support with <see cref="A2AClientFactory"/> so that agent cards
+    /// declaring <c>protocolVersion: "0.3"</c> are automatically routed to a v0.3 client.
+    /// Call this once at application startup.
+    /// </summary>
+    public static void RegisterWithMainFactory()
+    {
+        A2AClientFactory.Register(ProtocolBindingNames.JsonRpc, "0.3", (url, httpClient) =>
+        {
+            var v03Client = new V03.A2AClient(url, httpClient);
+            return new V03ClientAdapter(v03Client);
+        });
+    }
 
     /// <summary>
     /// Creates an <see cref="IA2AClient"/> that communicates with a v0.3 agent at the given URL.
