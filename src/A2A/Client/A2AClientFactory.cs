@@ -151,9 +151,10 @@ public static class A2AClientFactory
         using var doc = JsonDocument.Parse(agentCardJson);
         var root = doc.RootElement;
 
-        // v1.0 card: has supportedInterfaces array.
+        // v1.0 card: has a non-empty supportedInterfaces array.
         if (root.TryGetProperty("supportedInterfaces", out var interfaces) &&
-            interfaces.ValueKind == JsonValueKind.Array)
+            interfaces.ValueKind == JsonValueKind.Array &&
+            interfaces.GetArrayLength() > 0)
         {
             var agentCard = BuildAgentCard(root, interfaces, baseUrl);
             return Create(agentCard, httpClient, options);
@@ -198,10 +199,17 @@ public static class A2AClientFactory
     {
         ArgumentNullException.ThrowIfNull(baseUrl);
 
+        options ??= new A2AClientOptions();
         var http = httpClient ?? s_sharedClient;
-        var cardPath = options?.AgentCardPath ?? "/.well-known/agent-card.json";
-        var cardUri = new Uri(baseUrl, cardPath);
-        var json = await http.GetStringAsync(cardUri.ToString(), cancellationToken).ConfigureAwait(false);
+        var cardUri = new Uri(baseUrl, options.AgentCardPath);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, cardUri);
+        request.Headers.TryAddWithoutValidation("A2A-Version", "1.0");
+
+        using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return Create(json, baseUrl, httpClient, options);
     }
 
